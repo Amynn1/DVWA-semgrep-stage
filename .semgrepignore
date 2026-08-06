@@ -1,0 +1,18 @@
+# Bibliothèques tierces (hors périmètre de l'étude)
+external/
+
+# Git
+.git/
+.github/
+
+# Documentation
+docs/
+*.md
+
+# Rapports générés
+reports/
+screenshots/
+
+# Fichiers temporaires
+tmp/
+*.log
