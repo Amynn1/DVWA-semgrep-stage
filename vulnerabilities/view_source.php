@@ -12,6 +12,13 @@ if (array_key_exists ("id", $_GET) && array_key_exists ("security", $_GET)) {
 	$id       = $_GET[ 'id' ];
 	$security = $_GET[ 'security' ];
 
+	$allowed_security_levels = array( 'low', 'medium', 'high', 'impossible' );
+	if ( !in_array( $security, $allowed_security_levels, true ) ) {
+		$page['body'] = "<p>Invalid security level</p>";
+		dvwaSourceHtmlEcho( $page );
+		exit;
+	}
+
 
 	switch ($id) {
 		case "fi" :
