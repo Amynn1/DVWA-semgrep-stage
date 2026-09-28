@@ -37,6 +37,89 @@ class UserController
 		$this->version = $version;
 	}
 
+	private function checkToken() {
+		if (array_key_exists ("HTTP_AUTHORIZATION", $_SERVER)) {
+			$header = $_SERVER['HTTP_AUTHORIZATION'];
+			$bits = explode (" ", $header);
+			if (count ($bits) == 2) {
+				if (strtolower($bits[0]) == "bearer") {
+					return (Login::check_access_token($bits[1]));
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private function getAuthenticatedUsername() {
+		if (array_key_exists ("HTTP_AUTHORIZATION", $_SERVER)) {
+			$header = $_SERVER['HTTP_AUTHORIZATION'];
+			$bits = explode (" ", $header);
+			if (count ($bits) == 2) {
+				if (strtolower($bits[0]) == "bearer") {
+					return Login::get_token_username($bits[1]);
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private function requireAuth() {
+		if (!$this->checkToken()) {
+			header('HTTP/1.1 401 Unauthorized');
+			echo json_encode (array ("status" => "Invalid or missing token"));
+			exit();
+		}
+	}
+
+	private function requireAdmin() {
+		$username = $this->getAuthenticatedUsername();
+		if ($username === null) {
+			header('HTTP/1.1 401 Unauthorized');
+			echo json_encode (array ("status" => "Invalid or missing token"));
+			exit();
+		}
+		$authenticatedUser = null;
+		foreach ($this->data as $user) {
+			if ($user->name === $username) {
+				$authenticatedUser = $user;
+				break;
+			}
+		}
+		if ($authenticatedUser === null || $authenticatedUser->level !== 0) {
+			header('HTTP/1.1 403 Forbidden');
+			echo json_encode (array ("status" => "Admin access required"));
+			exit();
+		}
+	}
+
+	private function requireSelfOrAdmin($targetUserId) {
+		$username = $this->getAuthenticatedUsername();
+		if ($username === null) {
+			header('HTTP/1.1 401 Unauthorized');
+			echo json_encode (array ("status" => "Invalid or missing token"));
+			exit();
+		}
+		$authenticatedUser = null;
+		foreach ($this->data as $user) {
+			if ($user->name === $username) {
+				$authenticatedUser = $user;
+				break;
+			}
+		}
+		if ($authenticatedUser === null) {
+			header('HTTP/1.1 403 Forbidden');
+			echo json_encode (array ("status" => "Access denied"));
+			exit();
+		}
+		if ($authenticatedUser->level !== 0 && $authenticatedUser->id !== $targetUserId) {
+			header('HTTP/1.1 403 Forbidden');
+			echo json_encode (array ("status" => "Access denied"));
+			exit();
+		}
+	}
+
 	private function validateAdd($input)
 	{
 		if (! isset($input['name'])) {
@@ -84,6 +167,8 @@ class UserController
 	
 	private function getUser($id)
 	{
+		$this->requireSelfOrAdmin($id);
+
 		if (!array_key_exists ($id, $this->data)) {
 			$gc = new GenericController("notFound");
 			$gc->processRequest();
@@ -92,7 +177,7 @@ class UserController
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$response['body'] = json_encode ($this->data[$id]->toArray($this->version));
 		return $response;
-	}	
+	}
 
     #[OAT\Get(
 		tags: ["user"],
@@ -113,6 +198,8 @@ class UserController
     ]  
 
 	private function getAllUsers() {
+		$this->requireAdmin();
+
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$all = array();
 		foreach ($this->data as $user) {
@@ -153,6 +240,8 @@ class UserController
 
 	private function addUser()
 	{
+		$this->requireAdmin();
+
 		$ret = Helpers::check_content_type();
 		if ($ret !== true) {
 			return $ret;
@@ -207,6 +296,8 @@ class UserController
 	
 	private function updateUser($id)
 	{
+		$this->requireSelfOrAdmin($id);
+
 		if (!array_key_exists ($id, $this->data)) {
 			$gc = new GenericController("notFound");
 			$gc->processRequest();
@@ -222,12 +313,22 @@ class UserController
 			$this->data[$id]->name = $input['name'];
 		}
 		if (array_key_exists ("level", $input)) {
-			$this->data[$id]->level = intval ($input['level']);
+			$username = $this->getAuthenticatedUsername();
+			$authenticatedUser = null;
+			foreach ($this->data as $user) {
+				if ($user->name === $username) {
+					$authenticatedUser = $user;
+					break;
+				}
+			}
+			if ($authenticatedUser !== null && $authenticatedUser->level === 0) {
+				$this->data[$id]->level = intval ($input['level']);
+			}
 		}
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$response['body'] = json_encode ($this->data[$id]->toArray($this->version));
 		return $response;
-	}	
+	}
 
     #[OAT\Delete(
 		tags: ["user"],
@@ -251,6 +352,8 @@ class UserController
     ]  
 	
 	private function deleteUser($id) {
+		$this->requireAdmin();
+
 		if (!array_key_exists ($id, $this->data)) {
 			$gc = new GenericController("notFound");
 			$gc->processRequest();

@@ -59,7 +59,7 @@ class LoginController
 
 			if ($username == "mrbennett" && $password == "becareful") {
 				$response['status_code_header'] = 'HTTP/1.1 200 OK';
-				$response['body'] = json_encode (array ("token" => Login::create_token()));
+				$response['body'] = json_encode (array ("token" => Login::create_token($username)));
 			} else {
 				$response['status_code_header'] = 'HTTP/1.1 401 Unauthorized';
 				$response['body'] = json_encode (array ("status" => "Invalid credentials"));
@@ -95,7 +95,7 @@ class LoginController
 
 								if ($username == "mrbennett" && $password == "becareful") {
 									$response['status_code_header'] = 'HTTP/1.1 200 OK';
-									$response['body'] = Login::create_token();
+									$response['body'] = Login::create_token($username);
 								} else {
 									$response['status_code_header'] = 'HTTP/1.1 401 Unauthorized';
 									$response['body'] = json_encode (array ("status" => "Invalid user credentials"));

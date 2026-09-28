@@ -39,11 +39,15 @@ class Token {
 		$cleartext = openssl_decrypt($value, self::ENCRYPTION_CIPHER, self::ENCRYPTION_KEY, $options=0, $iv, $tag);
 		return $cleartext;
 	}
-	public function create_token($secret, $expires) {
-		$token = self::encrypt (json_encode (array (
-						"secret" => $secret,
-						"expires" => $expires,
-					)));
+	public function create_token($secret, $expires, $username = null) {
+		$payload = array (
+			"secret" => $secret,
+			"expires" => $expires,
+		);
+		if ($username !== null) {
+			$payload["username"] = $username;
+		}
+		$token = self::encrypt (json_encode ($payload));
 		return $token;
 	}
 

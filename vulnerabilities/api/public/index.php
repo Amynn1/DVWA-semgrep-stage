@@ -46,6 +46,13 @@ if (preg_match ("/v([0-9]*)/", $version, $matches)) {
 	header("HTTP/1.1 404 Not Found");
 	exit();
 }
+
+if ($version < 2) {
+	header("HTTP/1.1 410 Gone");
+	header("Content-Type: application/json; charset=UTF-8");
+	echo json_encode (array ("status" => "API v1 is deprecated and no longer available"));
+	exit();
+}
 $controller = $local_uri[1];
 
 switch ($controller) {

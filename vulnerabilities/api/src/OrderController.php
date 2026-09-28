@@ -35,6 +35,31 @@ class OrderController
 		return false;
 	}
 
+	private function getAuthenticatedUsername() {
+		if (array_key_exists ("HTTP_AUTHORIZATION", $_SERVER)) {
+			$header = $_SERVER['HTTP_AUTHORIZATION'];
+			$bits = explode (" ", $header);
+			if (count ($bits) == 2) {
+				if (strtolower($bits[0]) == "bearer") {
+					return Login::get_token_username($bits[1]);
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private function checkOrderOwnership($orderId) {
+		$username = $this->getAuthenticatedUsername();
+		if ($username === null) {
+			return false;
+		}
+		if (!array_key_exists ($orderId, $this->data)) {
+			return true;
+		}
+		return strtolower($this->data[$orderId]->name) === strtolower($username);
+	}
+
 	private function validateAdd($input)
 	{
 		if (! isset($input['name'])) {
@@ -106,10 +131,15 @@ class OrderController
 			$gc->processRequest();
 			exit();
 		}
+		if (!$this->checkOrderOwnership($id)) {
+			$response['status_code_header'] = 'HTTP/1.1 403 Forbidden';
+			$response['body'] = json_encode (array ("status" => "Access denied"));
+			return $response;
+		}
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$response['body'] = json_encode ($this->data[$id]->toArray($this->version));
 		return $response;
-	}	
+	}
 
     #[OAT\Get(
 		tags: ["order"],
@@ -136,10 +166,13 @@ class OrderController
 			return $response;
 		}
 
+		$username = $this->getAuthenticatedUsername();
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$all = array();
 		foreach ($this->data as $order) {
-			$all[] = $order->toArray($this->version);
+			if ($username !== null && strtolower($order->name) === strtolower($username)) {
+				$all[] = $order->toArray($this->version);
+			}
 		}
 		$response['body'] = json_encode($all);
 		return $response;
@@ -188,7 +221,8 @@ class OrderController
 			$gc->processRequest();
 			exit();
 		}
-		$order = new Order(null, $input['name'], $input['address'], $input['items'], 0);
+		$username = $this->getAuthenticatedUsername();
+		$order = new Order(null, $username, $input['address'], $input['items'], 0);
 		$this->data[] = $order;
 		$response['status_code_header'] = 'HTTP/1.1 201 Created';
 		$response['body'] = json_encode($order->toArray($this->version));
@@ -242,14 +276,16 @@ class OrderController
 			$gc->processRequest();
 			exit();
 		}
+		if (!$this->checkOrderOwnership($id)) {
+			$response['status_code_header'] = 'HTTP/1.1 403 Forbidden';
+			$response['body'] = json_encode (array ("status" => "Access denied"));
+			return $response;
+		}
 		$input = (array) json_decode(file_get_contents('php://input'), TRUE);
 		if (! $this->validateUpdate($input)) {
 			$gc = new GenericController("unprocessable");
 			$gc->processRequest();
 			exit();
-		}
-		if (array_key_exists ("name", $input)) {
-			$this->data[$id]->name = $input['name'];
 		}
 		if (array_key_exists ("address", $input)) {
 			$this->data[$id]->address = $input['address'];
@@ -260,7 +296,7 @@ class OrderController
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$response['body'] = json_encode ($this->data[$id]->toArray($this->version));
 		return $response;
-	}	
+	}
 
     #[OAT\Delete(
 		tags: ["order"],
@@ -294,6 +330,11 @@ class OrderController
 			$gc = new GenericController("notFound");
 			$gc->processRequest();
 			exit();
+		}
+		if (!$this->checkOrderOwnership($id)) {
+			$response['status_code_header'] = 'HTTP/1.1 403 Forbidden';
+			$response['body'] = json_encode (array ("status" => "Access denied"));
+			return $response;
 		}
 		unset ($this->data[$id]);
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
